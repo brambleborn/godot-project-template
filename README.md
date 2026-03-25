@@ -83,5 +83,22 @@ provided manually at `godot/icon.icns`.
 Each module is self-contained — import only what you need.
 
 ```sh
-git submodule update --remote godot/modules   # update to latest
+git submodule update --remote godot/modules
+```
+
+## godot-tools submodule
+
+`tools/` tracks [brambleborn/godot-tools](https://github.com/brambleborn/godot-tools).
+Shell scripts for asset processing and validation. Requires `ffmpeg`.
+
+```
+tools/pipeline/   audio conversion (→ OGG), trim, normalize; texture compression (→ WebP)
+tools/audit/      oversized files, bad formats, orphaned assets
+tools/tools/      post-export: video compression, screenshot resizing
+```
+
+Scripts auto-discover `game.cfg` by traversing upward, so run them from anywhere in the project.
+
+```sh
+git submodule update --remote tools
 ```
