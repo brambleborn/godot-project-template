@@ -1,0 +1,16 @@
+# Godot
+.import/
+export.cfg
+godot/.godot/
+godot/export_presets.cfg
+godot/project.godot
+
+# Builds
+build/
+
+# Android signing
+*.keystore
+*.keystore.*
+
+# macOS
+.DS_Store
