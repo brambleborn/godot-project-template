@@ -1,3 +1,9 @@
 [submodule "godot/modules"]
 	path = godot/modules
 	url = https://github.com/brambleborn/godot-modules
+[submodule "godot/addons/gut"]
+	path = godot/addons/gut
+	url = https://github.com/bitwes/Gut.git
+[submodule "tools"]
+	path = tools
+	url = https://github.com/brambleborn/godot-tools

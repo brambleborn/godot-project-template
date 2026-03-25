@@ -8,6 +8,7 @@ A Godot 4.6 project template with multi-platform export and itch.io deployment.
 game.cfg                        ← edit this first — all project identity lives here
 setup.sh                        ← run once after cloning
 export.sh                       ← run to build and optionally deploy
+tools/                          ← git submodule: brambleborn/godot-tools (asset pipeline, audit)
 godot/
   project.godot.tpl             ← rendered to project.godot by setup.sh
   export_presets.cfg.tpl        ← rendered to export_presets.cfg by export.sh
@@ -15,6 +16,7 @@ godot/
   main.tscn                     ← empty root node, replace with your own
   assets/                       ← drop game assets here
   modules/                      ← git submodule: brambleborn/godot-modules
+  addons/gut/                   ← git submodule: bitwes/Gut (unit testing)
 ```
 
 Generated files (`project.godot`, `export_presets.cfg`, `godot/.godot/`) are gitignored.
@@ -63,6 +65,16 @@ Requires:
 - `ITCHIO_API_KEY` env var set (not stored in game.cfg intentionally)
 - `[itch]` user and game set in `game.cfg`
 
+## GUT (unit testing)
+
+`godot/addons/gut` tracks [bitwes/Gut](https://github.com/bitwes/Gut).
+The plugin is pre-enabled in `project.godot.tpl`. Write tests in `godot/test/`.
+
+To update:
+```sh
+git submodule update --remote godot/addons/gut
+```
+
 ## godot-modules submodule
 
 `godot/modules` tracks [brambleborn/godot-modules](https://github.com/brambleborn/godot-modules).
@@ -71,6 +83,23 @@ Each module is self-contained — import only what you need. See `godot/modules/
 To update to the latest modules:
 ```sh
 git submodule update --remote godot/modules
+```
+
+## godot-tools submodule
+
+`tools/` tracks [brambleborn/godot-tools](https://github.com/brambleborn/godot-tools).
+Shell scripts for asset processing, validation, and post-export tasks. Requires `ffmpeg`.
+Scripts auto-discover `game.cfg` by traversing upward from the working directory.
+
+```
+tools/pipeline/   ← audio conversion, trim, normalize; texture compression
+tools/audit/      ← asset validation, orphan detection
+tools/tools/      ← post-export utilities (video compression, screenshot resizing)
+```
+
+To update:
+```sh
+git submodule update --remote tools
 ```
 
 ## macOS and iOS
