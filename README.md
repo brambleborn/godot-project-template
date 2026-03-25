@@ -101,4 +101,5 @@ Scripts auto-discover `game.cfg` by traversing upward, so run them from anywhere
 
 ```sh
 git submodule update --remote tools
+git submodule update --remote godot/modules   # update to latest
 ```
