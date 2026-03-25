@@ -1,5 +1,5 @@
 # Godot
-.import/
+# .import/ was Godot 3; in Godot 4 imports live inside .godot/ (already ignored below)
 export.cfg
 godot/.godot/
 godot/export_presets.cfg

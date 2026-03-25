@@ -11,6 +11,7 @@
 #   --mac               Include macOS export (requires running on macOS)
 #   --ios               Include iOS export (requires running on macOS)
 #   --version <tag>     Version string for itch.io upload (default: git describe)
+#   --dry-run           Print what would be exported/pushed without running Godot or butler
 #   -h, --help          Show this help message
 #
 # itch.io credentials are read from game.cfg [itch] section.
@@ -24,7 +25,12 @@ CFG="$SCRIPT_DIR/game.cfg"
 # ── Read game.cfg ─────────────────────────────────────────────────────────────
 cfg_get() {
   local section="$1" key="$2"
-  awk -F= "/^\[$section\]/{f=1} f && /^$key=/{gsub(/^[^=]+=/, \"\"); print; exit}" "$CFG"
+  awk -F= "/^\[$section\]/{f=1} /^\[/{if (!/^\[$section\]/) f=0} f && /^$key=/{gsub(/^[^=]+=/, \"\"); print; exit}" "$CFG"
+}
+
+# Escape a value for safe use as a sed replacement string (escapes / and &)
+sed_escape() {
+  printf '%s' "$1" | sed 's/[\/&]/\\&/g'
 }
 
 PROJECT_NAME="$(cfg_get project name)"
@@ -41,6 +47,7 @@ OUTPUT_DIR="$SCRIPT_DIR/build"
 PUSH_ITCH=false
 INCLUDE_MAC=false
 INCLUDE_IOS=false
+DRY_RUN=false
 VERSION=""
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
@@ -48,10 +55,11 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) PROJECT_PATH="$2"; shift 2 ;;
     --output)  OUTPUT_DIR="$2";   shift 2 ;;
-    --itch)    PUSH_ITCH=true;    shift ;;
-    --mac)     INCLUDE_MAC=true;  shift ;;
-    --ios)     INCLUDE_IOS=true;  shift ;;
-    --version) VERSION="$2";      shift 2 ;;
+    --itch)     PUSH_ITCH=true;    shift ;;
+    --mac)      INCLUDE_MAC=true;  shift ;;
+    --ios)      INCLUDE_IOS=true;  shift ;;
+    --version)  VERSION="$2";      shift 2 ;;
+    --dry-run)  DRY_RUN=true;      shift ;;
     -h|--help)
       sed -n '/^# Usage/,/^[^#]/p' "$0" | grep '^#' | sed 's/^# \?//'
       exit 0 ;;
@@ -67,7 +75,7 @@ if [[ "$INCLUDE_MAC" == true || "$INCLUDE_IOS" == true ]]; then
   fi
 fi
 
-if [[ "$PUSH_ITCH" == true ]]; then
+if [[ "$PUSH_ITCH" == true && "$DRY_RUN" == false ]]; then
   if ! command -v butler &>/dev/null; then
     echo "Error: 'butler' not found in PATH." >&2; exit 1
   fi
@@ -81,6 +89,7 @@ if [[ "$PUSH_ITCH" == true ]]; then
 fi
 
 if [[ -z "$VERSION" ]]; then
+  # Prefer the latest git tag; fall back to [project] version in game.cfg; then "dev"
   VERSION=$(git -C "$SCRIPT_DIR" describe --tags --abbrev=0 2>/dev/null || echo "${VERSION_DEFAULT:-dev}")
 fi
 
@@ -111,15 +120,33 @@ ITCH_CHANNELS["iOS"]="ios"
 # ── Render export_presets.cfg from template ───────────────────────────────────
 PRESETS_TPL="$PROJECT_PATH/export_presets.cfg.tpl"
 PRESETS_OUT="$PROJECT_PATH/export_presets.cfg"
-sed \
-  -e "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" \
-  -e "s/{{COMPANY_NAME}}/$COMPANY_NAME/g" \
-  -e "s/{{BUNDLE_ID}}/$BUNDLE_ID/g" \
-  -e "s/{{COPYRIGHT}}/$COPYRIGHT/g" \
-  -e "s/{{VERSION}}/$VERSION/g" \
-  "$PRESETS_TPL" > "$PRESETS_OUT"
+if [[ "$DRY_RUN" == false ]]; then
+  sed \
+    -e "s/{{PROJECT_NAME}}/$(sed_escape "$PROJECT_NAME")/g" \
+    -e "s/{{COMPANY_NAME}}/$(sed_escape "$COMPANY_NAME")/g" \
+    -e "s/{{BUNDLE_ID}}/$(sed_escape "$BUNDLE_ID")/g" \
+    -e "s/{{COPYRIGHT}}/$(sed_escape "$COPYRIGHT")/g" \
+    -e "s/{{VERSION}}/$(sed_escape "$VERSION")/g" \
+    "$PRESETS_TPL" > "$PRESETS_OUT"
+fi
 
 # ── Run exports ───────────────────────────────────────────────────────────────
+if [[ "$DRY_RUN" == true ]]; then
+  echo "Dry run — would export the following presets to $OUTPUT_DIR/:"
+  for preset in "${!PRESETS[@]}"; do
+    echo "  $preset → ${PRESETS[$preset]}"
+  done
+  if [[ "$PUSH_ITCH" == true ]]; then
+    echo ""
+    echo "Dry run — would push to itch.io ($ITCH_USER/$ITCH_GAME @ $VERSION):"
+    for preset in "${!ITCH_CHANNELS[@]}"; do
+      [[ -v "PRESETS[$preset]" ]] || continue
+      echo "  ${ITCH_CHANNELS[$preset]} ← $(dirname "${PRESETS[$preset]}")"
+    done
+  fi
+  exit 0
+fi
+
 mkdir -p "$OUTPUT_DIR"
 
 for preset in "${!PRESETS[@]}"; do
@@ -128,11 +155,13 @@ for preset in "${!PRESETS[@]}"; do
   mkdir -p "$out_dir"
 
   echo "Exporting: $preset → $out_file"
-  godot --headless --path "$PROJECT_PATH" --export-release "$preset" "$(realpath "$out_file")" 2>&1
+  godot --headless --path "$PROJECT_PATH" --export-release "$preset" "$out_file" 2>&1
 
   # HTML5: inject coi-serviceworker for SharedArrayBuffer support
   if [[ "$preset" == "HTML5" ]]; then
-    coi_url="https://github.com/gzuidhof/coi-serviceworker/raw/master/coi-serviceworker.js"
+    # Pinned to a specific commit for reproducibility
+    coi_commit="7b1d2a092d0d2dd2b7270b6f12f13605de26f214"
+    coi_url="https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/${coi_commit}/coi-serviceworker.js"
     echo "  Injecting coi-serviceworker..."
     curl -fsSL "$coi_url" -o "$out_dir/coi-serviceworker.js"
     sed -i 's#\(<script src="index.js"></script>\)#<script src="coi-serviceworker.js"></script>\n\1#g' "$out_dir/index.html"
